@@ -12,6 +12,7 @@ import (
 	"github.com/globocom/secDevLabs/owasp-top10-2017-apps/a3/snake-pro/app/types"
 	"github.com/google/uuid"
 	"github.com/labstack/echo"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // HealthCheck is the heath check function.
@@ -41,6 +42,22 @@ func ReadCookie(c echo.Context) (string, error) {
 	return cookie.Value, err
 }
 
+// let's encrypt the users data
+func hashAndSalt(pwd []byte) (string, error) {
+
+	// Use GenerateFromPassword to hash & salt pwd.
+	// MinCost is just an integer constant provided by the bcrypt
+	// package along with DefaultCost & MaxCost.
+	// The cost can be any value you want provided it isn't lower
+	// than the MinCost (4)
+	hash, err := bcrypt.GenerateFromPassword(pwd, bcrypt.MinCost)
+	if err != nil {
+		return "", err
+	} // GenerateFromPassword returns a byte slice so we need to
+	// convert the bytes to a string and return it
+	return string(hash), nil
+}
+
 // Register registers a new user into MongoDB.
 func Register(c echo.Context) error {
 
@@ -54,6 +71,13 @@ func Register(c echo.Context) error {
 	if userData.Password != userData.RepeatPassword {
 		return c.JSON(http.StatusBadRequest, map[string]string{"result": "error", "details": "Passwords do not match."})
 	}
+
+	// let's hash the password
+	hash, err := hashAndSalt([]byte(userData.Password))
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"result": "error", "details": "Error while hashing password"})
+	}
+	userData.Password = hash
 
 	newGUID1 := uuid.Must(uuid.NewRandom())
 	userData.UserID = newGUID1.String()
